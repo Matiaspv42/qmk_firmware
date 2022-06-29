@@ -27,9 +27,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define MASTER_LEFT
 // #define MASTER_RIGHT
 // #define EE_HANDS
-
+#define OLED_DRIVER_ENABLE
 //#define TAPPING_FORCE_HOLD
 //#define TAPPING_TERM 100
+// choose IS_LEFT or IS_RIGHT for compilation and flash firmware
+#define IS_LEFT 1
+//#define IS_RIGHT 1
+
+// logo glitch
+#define WITH_GLITCH
+// boot sequence
+#define WITH_BOOT
+
+// custom transport for displaying on both side
+#define SPLIT_TRANSACTION_IDS_USER USER_SYNC_A
 
 #ifdef RGBLIGHT_ENABLE
     #define RGBLIGHT_EFFECT_BREATHING
@@ -48,4 +59,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     #define RGBLIGHT_VAL_STEP 17
 #endif
 
-#define OLED_FONT_H "keyboards/crkbd/lib/glcdfont.c"
+// custom font
+#ifdef OLED_FONT_H
+#    undef OLED_FONT_H
+#endif
+#define OLED_FONT_H "navi_font.c"
+#undef OLED_FONT_END
+#define OLED_FONT_END 125
+// ???
+#undef LOCKING_SUPPORT_ENABLE
+#undef LOCKING_RESYNC_ENABLE
+
+// small layer state
+#define LAYER_STATE_8BIT
+
+// no debug or trace
+#ifndef NO_DEBUG
+#    define NO_DEBUG
+#endif
+#if !defined(NO_PRINT) && !defined(CONSOLE_ENABLE)
+#    define NO_PRINT
+#endif 
