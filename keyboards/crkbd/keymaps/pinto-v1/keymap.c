@@ -17,22 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include QMK_KEYBOARD_H
-#include "transactions.h"
-
-// global
-#include "gui_state.h"
-#include "boot.h"
-#include "navi_logo.h"
-
-#include "draw_helper.h"
-#include "fast_random.h"
-
-// left side
-#include "layer_frame.h"
-#include "burst.h"
-
-// right side
-#include "ring.h"
+#include <stdio.h>
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
   [0] = LAYOUT_split_3x6_3(
@@ -62,11 +47,11 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
   [2] = LAYOUT_split_3x6_3(
   //,-----------------------------------------------------.                    ,-----------------------------------------------------.
-	   KC_TAB, KC_EXLM,   KC_AT, KC_LPRN,  KC_RPRN, KC_PERC,                      KC_EQL, KC_NO,  KC_NO,     KC_NO,  KC_NO,   KC_BSPC,
+	   KC_TAB, KC_EXLM,   KC_AT, KC_LPRN,  KC_RPRN, KC_PERC,                      KC_EQL, KC_COMM,  KC_NO,     KC_NO,  KC_NO,   KC_BSPC,
   //|--------+--------+--------+--------+--------+--------|                    |--------+--------+--------+--------+--------+--------|
 	  KC_LCTL, XXXXXXX, XXXXXXX, KC_LCBR, KC_RCBR, XXXXXXX,                      KC_EXLM,  KC_HASH, KC_SLSH, KC_BSLS, KC_PIPE,  KC_DLR,
   //|--------+--------+--------+--------+--------+--------|                    |--------+--------+--------+--------+--------+--------|
-	  KC_LSFT, XXXXXXX, XXXXXXX, KC_LBRC, KC_RBRC, XXXXXXX,                      XXXXXXX, KC_GRV, KC_CIRC, KC_AT, KC_AMPR, KC_TILD,
+	  KC_LSFT, XXXXXXX, XXXXXXX, KC_LBRC, KC_RBRC, XXXXXXX,                      KC_MINS, KC_GRV, KC_CIRC, KC_AT, KC_AMPR, KC_TILD,
   //|--------+--------+--------+--------+--------+--------+--------|  |--------+--------+--------+--------+--------+--------+--------|
 										  KC_LGUI,   MO(3),  KC_SPC,     KC_SPC, _______, KC_RALT
 									  //`--------------------------'  `--------------------------'
@@ -74,179 +59,118 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
   [3] = LAYOUT_split_3x6_3(
   //,-----------------------------------------------------.                    ,-----------------------------------------------------.
-		QK_BOOT, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,                      KC_PPLS, KC_1, KC_2, KC_3, KC_MINS, XXXXXXX,
+		QK_BOOT, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,                      KC_PPLS, KC_1, KC_2, KC_3, KC_MINS, KC_BSPC,
   //|--------+--------+--------+--------+--------+--------|                    |--------+--------+--------+--------+--------+--------|
-	  RGB_TOG, RGB_HUI, RGB_SAI, RGB_VAI, XXXXXXX, XXXXXXX,                      KC_PAST, KC_4, KC_5, KC_6, KC_SLSH, XXXXXXX,
+	  RGB_TOG, RGB_HUI, RGB_SAI, RGB_VAI, XXXXXXX, KC_LSFT,                      KC_PAST, KC_4, KC_5, KC_6, KC_SLSH, KC_COMM,  
   //|--------+--------+--------+--------+--------+--------|                    |--------+--------+--------+--------+--------+--------|
-	  RGB_MOD, RGB_HUD, RGB_SAD, RGB_VAD, XXXXXXX, XXXXXXX,                      XXXXXXX, KC_7, KC_8, KC_9, KC_0, XXXXXXX,
+	  RGB_MOD, RGB_HUD, RGB_SAD, RGB_VAD, XXXXXXX, XXXXXXX,                      XXXXXXX, KC_7, KC_8, KC_9, KC_0, KC_DOT,
   //|--------+--------+--------+--------+--------+--------+--------|  |--------+--------+--------+--------+--------+--------+--------|
 										  KC_LGUI, _______,  KC_SPC,     KC_ENT, _______, KC_RALT
 									  //`--------------------------'  `--------------------------'
   )
 };
 
-// clang-format on
-
-// sync transport
-typedef struct _sync_keycode_t {
-    uint16_t keycode;
-} sync_keycode_t;
-
-// force rigth side to update
-bool b_sync_need_send = false;
-
-// last keycode typed
-sync_keycode_t last_keycode;
-
+#ifdef OLED_ENABLE
 oled_rotation_t oled_init_user(oled_rotation_t rotation) {
-    // vertical orientation
-    return OLED_ROTATION_270;
+  if (!is_keyboard_master()) {
+    return OLED_ROTATION_180;  // flips the display 180 degrees if offhand
+  }
+  return rotation;
 }
 
-void render(gui_state_t t) {
-    // logo
-    render_logo(t);
+#define L_BASE 0
+#define L_LOWER 2
+#define L_RAISE 4
+#define L_ADJUST 8
 
-#if IS_LEFT
-    // left side
-    render_layer_frame(t);
-    render_gears();
-
-    decay_scope();
-    render_scope(t);
-#endif
-
-#if IS_RIGHT
-    // right side
-    render_circle(t);
-#endif
+void oled_render_layer_state(void) {
+    oled_write_P(PSTR("Layer: "), false);
+    switch (layer_state) {
+        case L_BASE:
+            oled_write_ln_P(PSTR("Default"), false);
+            break;
+        case L_LOWER:
+            oled_write_ln_P(PSTR("Lower"), false);
+            break;
+        case L_RAISE:
+            oled_write_ln_P(PSTR("Raise"), false);
+            break;
+        case L_ADJUST:
+        case L_ADJUST|L_LOWER:
+        case L_ADJUST|L_RAISE:
+        case L_ADJUST|L_LOWER|L_RAISE:
+            oled_write_ln_P(PSTR("Adjust"), false);
+            break;
+    }
 }
 
-void update(uint16_t keycode) {
-#if IS_LEFT
-    update_scope();
-#endif
 
-#if IS_RIGHT
-    update_circle(keycode);
-#endif
+char keylog_str[24] = {};
+
+const char code_to_name[60] = {
+    ' ', ' ', ' ', ' ', 'a', 'b', 'c', 'd', 'e', 'f',
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+    'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+    'R', 'E', 'B', 'T', '_', '-', '=', '[', ']', '\\',
+    '#', ';', '\'', '`', ',', '.', '/', ' ', ' ', ' '};
+
+void set_keylog(uint16_t keycode, keyrecord_t *record) {
+  char name = ' ';
+    if ((keycode >= QK_MOD_TAP && keycode <= QK_MOD_TAP_MAX) ||
+        (keycode >= QK_LAYER_TAP && keycode <= QK_LAYER_TAP_MAX)) { keycode = keycode & 0xFF; }
+  if (keycode < 60) {
+    name = code_to_name[keycode];
+  }
+
+  // update keylog
+  snprintf(keylog_str, sizeof(keylog_str), "%dx%d, k%2d : %c",
+           record->event.key.row, record->event.key.col,
+           keycode, name);
 }
 
-void reset(void) {
-#if IS_LEFT
-    reset_scope();
-#endif
-
-#if IS_RIGHT
-    reset_ring();
-#endif
+void oled_render_keylog(void) {
+    oled_write(keylog_str, false);
 }
 
-void set_wackingup_mode_clean(void) {
-    oled_clear();
-    reset();
+void render_bootmagic_status(bool status) {
+    /* Show Ctrl-Gui Swap options */
+    static const char PROGMEM logo[][2][3] = {
+        {{0x97, 0x98, 0}, {0xb7, 0xb8, 0}},
+        {{0x95, 0x96, 0}, {0xb5, 0xb6, 0}},
+    };
+    if (status) {
+        oled_write_ln_P(logo[0][0], false);
+        oled_write_ln_P(logo[0][1], false);
+    } else {
+        oled_write_ln_P(logo[1][0], false);
+        oled_write_ln_P(logo[1][1], false);
+    }
+}
+
+void oled_render_logo(void) {
+    static const char PROGMEM crkbd_logo[] = {
+        0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f, 0x90, 0x91, 0x92, 0x93, 0x94,
+        0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf, 0xb0, 0xb1, 0xb2, 0xb3, 0xb4,
+        0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf, 0xd0, 0xd1, 0xd2, 0xd3, 0xd4,
+        0};
+    oled_write_P(crkbd_logo, false);
 }
 
 bool oled_task_user(void) {
-    gui_state_t t = get_gui_state();
-
-    // in sleep mode => turn display off
-    if (t == _SLEEP) {
-        oled_off();
-        return false;
+    if (is_keyboard_master()) {
+        oled_render_layer_state();
+        oled_render_keylog();
+    } else {
+        oled_render_logo();
     }
-
-    // not in sleep mode => screen is on
-    oled_on();
-
-#ifdef WITH_BOOT
-    // in booting mode => display booting animation
-    if (t == _BOOTING) {
-        bool boot_finished = render_boot();
-        if (boot_finished) {
-            // end of the boot : wacking up
-            set_wackingup_mode_clean();
-            update_gui_state();
-        }
-        return false;
-    }
-#endif
-
-    // in halting mode => display booting animation
-    if (t == _HALTING) {
-        render_halt();
-        return false;
-    }
-
-    render(t);
     return false;
 }
 
-void process_key(uint16_t keycode) {
-    // update screen with the new key
-    update(keycode);
-
-    gui_state_t t = get_gui_state();
-
-    if (t == _IDLE) {
-        // wake up animation
-        reset();
-    }
-
-    if (t == _BOOTING || t == _HALTING) {
-        // cancel booting or halting : waking_up
-        set_wackingup_mode_clean();
-    }
-
-    if (t == _SLEEP) {
-        // boot sequence
-        set_wackingup_mode_clean();
-        reset_boot();
-    }
-
-    update_gui_state();
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+  if (record->event.pressed) {
+    set_keylog(keycode, record);
+  }
+  return true;
 }
-
-void user_sync_a_slave_handler(uint8_t in_buflen, const void* in_data, uint8_t out_buflen, void* out_data) {
-    const sync_keycode_t* m2s = (const sync_keycode_t*)in_data;
-    // get the last char typed on left side and update the right side
-    process_key(m2s->keycode);
-}
-
-void keyboard_post_init_user(void) {
-    // callback for tranport sync data
-    transaction_register_rpc(USER_SYNC_A, user_sync_a_slave_handler);
-}
-
-void housekeeping_task_user(void) {
-    // only for master side
-    if (!is_keyboard_master()) return;
-
-    // only if a new char was typed
-    if (!b_sync_need_send) return;
-
-    // send the char to the slave side : sync is done
-    if (transaction_rpc_send(USER_SYNC_A, sizeof(last_keycode), &last_keycode)) {
-        b_sync_need_send = false;
-    }
-}
-
-bool process_record_user(uint16_t keycode, keyrecord_t* record) {
-    if (record->event.pressed) {
-        // master : store keycode to sent to the other side to be process_key
-        last_keycode.keycode = keycode;
-        b_sync_need_send     = true;
-
-        // gui process the input
-        process_key(keycode);
-    }
-    return true;
-}
-
-#if IS_LEFT
-layer_state_t layer_state_set_user(layer_state_t state) {
-    // update the frame with the layer name
-    update_layer_frame(state);
-    return state;
-}
-#endif
+#endif // OLED_ENABLE
